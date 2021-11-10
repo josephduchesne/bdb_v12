@@ -1,0 +1,4 @@
+"name": "DShot_NRF52",
+"version": "0.9.0",
+"description": "A DShot implementation for NRF52 platform",
+"keywords": ["dshot", "pwm", "nrf52"]
