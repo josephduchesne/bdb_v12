@@ -1,14 +1,11 @@
 #include <Arduino.h>
-#include <Servo.h>
-
-Servo ESC;     // create servo object to control the ESC
 #include <stdio.h>
 #include <string.h>
-//#include <nrfx.h>
-//#include <nrfx_pwm.h>
+#include <nrfx.h>
+#include <nrfx_pwm.h>
 #include "SEGGER_RTT.h"
-//#include "dshot_nrf52.h"
-//#include "bdb_ble.h"
+#include "dshot_nrf52.h"
+#include "bdb_ble.h"
 
 // from: KISS_telemetry_protocol.pdf
 typedef struct {
@@ -22,7 +19,7 @@ typedef struct {
 
 
 
-//DShotPWMOutput dshot_motors;
+DShotPWMOutput dshot_motors;
 
 
 // From KISS_telemetry_protocol.pdf
@@ -54,15 +51,13 @@ void print_telemetry(uint8_t *buffer) {
   // else SEGGER_RTT_WriteString(0, "CRC Fail");
 }
 
-
 void spamChannel(int wait, int times, int value) {
   static int telem = 0;
   for (int i=0;i<times; i++) {
     //telem++;
     //if(telem>10) telem = 0;
-    //dshot_motors.setChannel(0,value, 0 /*telem==0*/);
-    //dshot_motors.display();
-    ESC.writeMicroseconds(value);
+    dshot_motors.setChannel(0,value, 0 /*telem==0*/);
+    dshot_motors.display();
     delay(wait);
 
   // if (Serial1.available()>=10) {  // TODO: Fix this terrible, lazy implementation
@@ -76,25 +71,14 @@ void spamChannel(int wait, int times, int value) {
   }
 }
 
-
 void setup() {
   
-  //dshot_motors.setup();
+  dshot_motors.setup();
   //Serial.begin(112500);
   delay(500);
-  //spamChannel(1, 10, 20);  // Normal Direction
-  //spamChannel(1, 10, 0);
-  SEGGER_RTT_printf(0,"Servo Attach: %d\n",  ESC.attach(30,1000,2000));
-  if(!ESC.attached()) SEGGER_RTT_printf(0,"Servo not attached!\n");
-  else SEGGER_RTT_printf(0,"Servo attached!\n");
-  ESC.writeMicroseconds(1000);
-  delay(1000);
-  ESC.writeMicroseconds(2000);
-  delay(1000);
-  ESC.writeMicroseconds(1500);
-  delay(1000);
-
-  SEGGER_RTT_printf(0,"Servo attached!\n");
+  spamChannel(1, 10, 20);  // 3d mode on 
+  //spamChannel(1, 1500, 0);
+  
 
   pinMode(LED_BUILTIN, OUTPUT);
 
@@ -120,18 +104,12 @@ void loop() {
   // delay(1000);                       // wait for a second
 
   //SEGGER_RTT_WriteString(0, "Hello World!\n");
-  //SEGGER_RTT_WriteString(0, "FW\n");
-  //spamChannel(1, 10, 20);  // Normal Direction
-  SEGGER_RTT_WriteString(0, "FW 0\n");
-  ESC.writeMicroseconds(1000);
-  delay(500);
-  SEGGER_RTT_WriteString(0, "FW 50\n");
-  ESC.writeMicroseconds(1500);
-  delay(500);
-  SEGGER_RTT_WriteString(0, "FW 100\n");
-  ESC.writeMicroseconds(2000);
-  delay(500);
-  //delay(20);
+  //SEGGER_RTT_WriteString(0, "FW");
+  //spamChannel(25, 10, 20);  // Normal Direction
+  SEGGER_RTT_WriteString(0, "FW Stop\n");
+  spamChannel(2, 1000, 48);
+  SEGGER_RTT_WriteString(0, "FW GO\n");
+  spamChannel(2, 2000, 500);
   
   // SEGGER_RTT_WriteString(0, "Rev Stop");
   // spamChannel(1, 10, 21);  // Reverse Direction
