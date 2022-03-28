@@ -5,7 +5,7 @@ BLEService        lbs(LBS_UUID_SERVICE);
 BLECharacteristic lsbButton(LBS_UUID_CHR_BUTTON);
 BLECharacteristic lsbLED(LBS_UUID_CHR_LED);
 
-//DShotPWMOutput *motors = nullptr;
+DShotPWMOutput *motors = nullptr;
 
 void startAdv(void)
 {
@@ -56,10 +56,20 @@ void led_write_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data
 
   // data = 1 -> LED = On
   // data = 0 -> LED = Off
-  setLED(data[0]);
-  uint16_t throttle = 48+((uint16_t)data[0])*8;
-  //SEGGER_RTT_printf(0, "Throttle M1 set to %d\n", throttle);
-  //motors->setChannel(0,throttle, 0); motors->display(); // set m1
+  int8_t throttle_in = (int8_t)data[0];
+  setLED(abs(throttle_in));
+  uint16_t throttle = 0;
+  if (throttle_in == 0) {
+    throttle = 0;
+  } else if (throttle_in<0) {
+    throttle_in = -throttle_in;
+    throttle = min(2047, 1048+((uint16_t)throttle_in)*10);
+  } else {
+    throttle = min(1047, 48+((uint16_t)throttle_in)*10);
+  }
+
+  SEGGER_RTT_printf(0, "Throttle M1 set to %d->%d\n", data[0], throttle);
+  motors->setChannel(0,throttle, 0); motors->display(); // set m1
 }
 
 
@@ -104,7 +114,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   setLED(false);
   lsbLED.write8(0x00);
 
-  //motors->setChannel(0,48, 0); motors->display(); // disable motor1
+  motors->setChannel(0, 0, 0); motors->display(); // disable motor1
   
 
   SEGGER_RTT_printf(0, "Disconnected, reason = 0x%x\n", reason); 
@@ -112,12 +122,12 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   connection_count--;
 }
 
-void ble_setup(/*DShotPWMOutput *motors_*/)
+void ble_setup(DShotPWMOutput *motors_)
 {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, 1-LED_STATE_ON); // led off
 
-  //motors = motors_;
+  motors = motors_;
 
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // for nrf52840 with native usb

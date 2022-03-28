@@ -2,7 +2,7 @@
 
 #include <bluefruit.h>
 #include "SEGGER_RTT.h"
-//#include "dshot_nrf52.h"
+#include "dshot_nrf52.h"
 #define MAX_PRPH_CONNECTION   1
 
 // String botctrl_uuid = "8dcad400-fbc4-491a-97fb-b1cd86515b9b";
@@ -23,6 +23,6 @@ const uint8_t LBS_UUID_CHR_LED[] =
   0xA1, 0x5b, 0x51, 0x86, 0xCD, 0xb1, 0xfb, 0x97, 0x1a, 0x49, 0xc4, 0xfb, 0x00, 0xd4, 0xca, 0x8d
 };
 
-void ble_setup(/*DShotPWMOutput *motors_*/);
+void ble_setup(DShotPWMOutput *motors_);
 
 void ble_loop();

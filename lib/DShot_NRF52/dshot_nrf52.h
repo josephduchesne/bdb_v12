@@ -11,7 +11,7 @@
 class DShotPWMOutput {
   private: 
     // 16 values required to represent the sequence
-    nrf_pwm_values_individual_t seq_values[16];
+    nrf_pwm_values_individual_t seq_values[17];
     nrf_pwm_sequence_t sequence;
     nrfx_pwm_config_t config;
   public:
