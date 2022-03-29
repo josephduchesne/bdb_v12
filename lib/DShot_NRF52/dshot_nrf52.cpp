@@ -11,12 +11,15 @@ static nrfx_pwm_t nordic_nrf5_pwm_instance[] = {
 #define DSHOT_0 19
 #define DSHOT_1 39
 
-void DShotPWMOutput::setup() {  // todo: make this more configurable
-config = NRFX_PWM_DEFAULT_CONFIG(
-    (uint8_t)digitalPinToPinName(30),  // 30 = M1
-    NRFX_PWM_PIN_NOT_USED,
-    NRFX_PWM_PIN_NOT_USED,
-    NRFX_PWM_PIN_NOT_USED
+void DShotPWMOutput::setup(uint8_t m1_pin, bool m1_dir, 
+                           uint8_t m2_pin, bool m2_dir, 
+                           uint8_t m3_pin, bool m3_dir, 
+                           uint8_t m4_pin, bool m4_dir) {  // todo: make this more configurable
+    config = NRFX_PWM_DEFAULT_CONFIG(
+        (uint8_t)digitalPinToPinName(m1_pin),
+        (uint8_t)digitalPinToPinName(m2_pin),
+        (uint8_t)digitalPinToPinName(m3_pin),
+        (uint8_t)digitalPinToPinName(m4_pin)
     );
 
     // https://blck.mn/2016/11/dshot-the-new-kid-on-the-block/
@@ -126,11 +129,25 @@ void DShotPWMOutput::setChannel(int channel, uint16_t throttle, bool telemetry_r
 
 }
 
+void DShotPWMOutput::setThrottle(int channel, int8_t throttle, bool telemetry_request)
+{
+  uint16_t output = 0;
+  if (throttle == 0) {
+    output = 0;
+  } else if (throttle<0) {
+    throttle = -throttle;
+    output = min(2047, 1048+((uint16_t)throttle)*10);
+  } else {
+    output = min(1047, 48+((uint16_t)throttle)*10);
+  }
+  setChannel(channel, output, telemetry_request);
+}
+
 void DShotPWMOutput::display(){
     sequence.values.p_individual = &seq_values[0];
     sequence.length = NRF_PWM_VALUES_LENGTH(seq_values);
     sequence.repeats = 0;
-    sequence.end_delay = 0;  // todo: see if 0 is fine here
+    sequence.end_delay = 0;
 
     // todo: check for errors?
     // NRFX_PWM_FLAG_STOP, NRFX_PWM_FLAG_LOOP

@@ -58,18 +58,13 @@ void led_write_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data
   // data = 0 -> LED = Off
   int8_t throttle_in = (int8_t)data[0];
   setLED(abs(throttle_in));
-  uint16_t throttle = 0;
-  if (throttle_in == 0) {
-    throttle = 0;
-  } else if (throttle_in<0) {
-    throttle_in = -throttle_in;
-    throttle = min(2047, 1048+((uint16_t)throttle_in)*10);
-  } else {
-    throttle = min(1047, 48+((uint16_t)throttle_in)*10);
-  }
 
-  SEGGER_RTT_printf(0, "Throttle M1 set to %d->%d\n", data[0], throttle);
-  motors->setChannel(0,throttle, 0); motors->display(); // set m1
+  SEGGER_RTT_printf(0, "Throttle M1 set to %d\n", throttle_in);
+  motors->setThrottle(0, throttle_in); 
+  motors->setThrottle(1, throttle_in); 
+  motors->setThrottle(2, throttle_in); 
+  motors->setThrottle(3, throttle_in); 
+  motors->display(); // set m1
 }
 
 
@@ -114,7 +109,11 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   setLED(false);
   lsbLED.write8(0x00);
 
-  motors->setChannel(0, 0, 0); motors->display(); // disable motor1
+  motors->setChannel(0, 0, 0);
+  motors->setChannel(1, 0, 0); 
+  motors->setChannel(2, 0, 0); 
+  motors->setChannel(3, 0, 0);
+  motors->display(); // disable motors
   
 
   SEGGER_RTT_printf(0, "Disconnected, reason = 0x%x\n", reason); 
