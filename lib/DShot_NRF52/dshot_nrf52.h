@@ -13,6 +13,10 @@ class DShotPWMOutput {
     nrf_pwm_values_individual_t seq_values[17];
     nrf_pwm_sequence_t sequence;
     nrfx_pwm_config_t config;
+    bool motor_directions[4] = {false, false, false, false};
+    int8_t last_motor_command[4] = {0, 0, 0, 0};
+    long unsigned int last_motor_time[4] = {0, 0, 0, 0};
+    const int zero_blanking_ms = 150;  // time to emit 0 between forwards and backwards motion
   public:
 
 

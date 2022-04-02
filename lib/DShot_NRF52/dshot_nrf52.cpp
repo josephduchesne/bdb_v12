@@ -21,6 +21,10 @@ void DShotPWMOutput::setup(uint8_t m1_pin, bool m1_dir,
         (uint8_t)digitalPinToPinName(m3_pin),
         (uint8_t)digitalPinToPinName(m4_pin)
     );
+    motor_directions[0] = m1_dir;
+    motor_directions[1] = m2_dir;
+    motor_directions[2] = m3_dir;
+    motor_directions[3] = m4_dir;
 
     // https://blck.mn/2016/11/dshot-the-new-kid-on-the-block/
     // dshot 300 timing requires 3.33us per bit
@@ -132,14 +136,32 @@ void DShotPWMOutput::setChannel(int channel, uint16_t throttle, bool telemetry_r
 void DShotPWMOutput::setThrottle(int channel, int8_t throttle, bool telemetry_request)
 {
   uint16_t output = 0;
+
+  // enforce blanking on zero crossing
+  
+  // if we're changing direction
+  if ((last_motor_command[channel]<0 && throttle>0) || (last_motor_command[channel]>0 && throttle<0)) {
+    // Skip moving until zero_blanking_ms has elapsed
+    if (millis() - last_motor_time[channel] < zero_blanking_ms) {
+        setChannel(channel, 0, telemetry_request);
+        return;   // skip other actions
+    }
+  }
+  // otherwise store the desired command
+  last_motor_command[channel] = throttle;
+
+  if (motor_directions[channel] == 1) throttle = -throttle; // invert if needed
   if (throttle == 0) {
     output = 0;
   } else if (throttle<0) {
     throttle = -throttle;
     output = min(2047, 1048+((uint16_t)throttle)*10);
+    last_motor_time[channel] = millis();
   } else {
     output = min(1047, 48+((uint16_t)throttle)*10);
+    last_motor_time[channel] = millis();
   }
+  
   setChannel(channel, output, telemetry_request);
 }
 

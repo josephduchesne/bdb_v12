@@ -2,10 +2,24 @@
 #include "SEGGER_RTT.h"
 
 BLEService        lbs(LBS_UUID_SERVICE);
-BLECharacteristic lsbButton(LBS_UUID_CHR_BUTTON);
-BLECharacteristic lsbLED(LBS_UUID_CHR_LED);
+BLECharacteristic lsbBotStatus(LBS_UUID_BOT_STATUS);
+BLECharacteristic lbsBotControl(LBS_UUID_BOT_CONTROL);
 
 DShotPWMOutput *motors = nullptr;
+
+void cccd_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_value)
+{
+    // Display the raw request packet
+    SEGGER_RTT_printf(0,"CCCD Updated: %d\n", cccd_value);
+    //Serial.printBuffer(request->data, request->len);
+    if (chr->uuid == lsbBotStatus.uuid) {
+        if (chr->notifyEnabled(conn_hdl)) {
+            SEGGER_RTT_printf(0,"lsbBotStatus 'Notify' enabled\n");
+        } else {
+            SEGGER_RTT_printf(0,"lsbBotStatus 'Notify' disabled\n");
+        }
+    }
+}
 
 void startAdv(void)
 {
@@ -44,10 +58,24 @@ void setLED(uint8_t on)
   //digitalWrite(LED_BUILTIN, on ? LED_STATE_ON : (1-LED_STATE_ON));
 }
 
-void led_write_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len)
+void ArcadeToDifferential(int8_t drive, int8_t steer, int8_t &left, int8_t &right) {
+
+    // Channel mixing math from http://home.kendra.com/mauser/joystick.html
+    // Get X and Y from the Joystick, do whatever scaling and calibrating you need to do based on your hardware.
+    float x = (float)steer;
+    float y = (float)drive;
+
+    float v = (100.0 - abs(x)) * (y / 100.0) + y;
+    float w = (100.0 - abs(y)) * (x / 100.0) + x;
+
+    right = (int8_t)((v + w) / 2.0);
+    left = (int8_t)((v - w) / 2.0);
+}
+
+void control_write_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len)
 {
   static unsigned long last_led_time = 0;
-  SEGGER_RTT_printf(0, "LED property set to %d, %luus since last\n", data[0], millis()-last_led_time);
+  //SEGGER_RTT_printf(0, "LED property set to %d, %luus since last\n", data[0], millis()-last_led_time);
   last_led_time = millis();
 
   (void) conn_hdl;
@@ -56,14 +84,18 @@ void led_write_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data
 
   // data = 1 -> LED = On
   // data = 0 -> LED = Off
-  int8_t throttle_in = (int8_t)data[0];
-  setLED(abs(throttle_in));
+  int8_t throttle_x = (int8_t)data[0];
+  int8_t throttle_y = (int8_t)data[1];
+  setLED(abs(throttle_y));
 
-  SEGGER_RTT_printf(0, "Throttle M1 set to %d\n", throttle_in);
-  motors->setThrottle(0, throttle_in); 
-  motors->setThrottle(1, throttle_in); 
-  motors->setThrottle(2, throttle_in); 
-  motors->setThrottle(3, throttle_in); 
+  int8_t throttle_left, throttle_right;
+  ArcadeToDifferential(throttle_y, throttle_x, throttle_left, throttle_right);
+
+  //SEGGER_RTT_printf(0, "Throttle M1 set to %d %d (%d %d)\n", throttle_x, throttle_y, throttle_left, throttle_right);
+  motors->setThrottle(0, throttle_left); 
+  motors->setThrottle(1, throttle_left); 
+  motors->setThrottle(2, throttle_right); 
+  motors->setThrottle(3, throttle_right); 
   motors->display(); // set m1
 }
 
@@ -76,7 +108,7 @@ void connect_callback(uint16_t conn_handle)
   BLEConnection* conn = Bluefruit.Connection(conn_handle);
 
   setLED(true);
-  lsbLED.write8(0xFF);
+  lbsBotControl.write16(0);  // set initial state to 0
 
   connection_count++;
   SEGGER_RTT_printf(0, "Connection count: %d\n", connection_count);
@@ -107,7 +139,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   (void) reason;
 
   setLED(false);
-  lsbLED.write8(0x00);
+  lbsBotControl.write16(0);  // disable motors
 
   motors->setChannel(0, 0, 0);
   motors->setChannel(1, 0, 0); 
@@ -120,6 +152,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 
   connection_count--;
 }
+
+
 
 void ble_setup(DShotPWMOutput *motors_)
 {
@@ -135,7 +169,7 @@ void ble_setup(DShotPWMOutput *motors_)
   SEGGER_RTT_WriteString(0, "------------------------------\n");
 
   // Initialize Bluefruit with max concurrent connections as Peripheral = MAX_PRPH_CONNECTION, Central = 0
-  SEGGER_RTT_WriteString(0, "Initialise the Bluefruit nRF52 module\n");
+  SEGGER_RTT_WriteString(0, "Initialise the nRF52 module\n");
   Bluefruit.autoConnLed(false);
   Bluefruit.begin(MAX_PRPH_CONNECTION, 0);
   Bluefruit.Periph.setConnectCallback(connect_callback);
@@ -155,30 +189,34 @@ void ble_setup(DShotPWMOutput *motors_)
   // Properties = Read + Notify
   // Permission = Open to read, cannot write
   // Fixed Len  = 1 (button state)
-//   lsbButton.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
-//   lsbButton.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-//   lsbButton.setFixedLen(1);
-//   lsbButton.begin();
-//   lsbButton.write8(buttonState);
+  lsbBotStatus.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
+  lsbBotStatus.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  lsbBotStatus.setFixedLen(1);
+  lsbBotStatus.setCccdWriteCallback(cccd_callback); 
+  lsbBotStatus.begin();
+  //lsbBotStatus.notify8(100);
 
   // Configure the LED characteristic
   // Properties = Read + Write
   // Permission = Open to read, Open to write
   // Fixed Len  = 1 (LED state)
-  lsbLED.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE_WO_RESP);
-  lsbLED.setPermission(SECMODE_OPEN, SECMODE_OPEN);
-  lsbLED.setFixedLen(2);
-  lsbLED.begin();
-  lsbLED.write8(0x01); // led = on when connected
+  lbsBotControl.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE_WO_RESP);
+  lbsBotControl.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+  lbsBotControl.setFixedLen(2);
+  lbsBotControl.begin();
+  lbsBotControl.write16(0x0); // Disabled on init
 
-  lsbLED.setWriteCallback(led_write_callback);
+  lbsBotControl.setWriteCallback(control_write_callback);
 
   // Setup the advertising packet(s)
   SEGGER_RTT_WriteString(0, "Setting up the advertising\n");
   startAdv();
 }
 
-
+void ble_update_status(uint8_t battery) {
+  SEGGER_RTT_printf(0, "Notifying battery: %d%%\n", battery); 
+  lsbBotStatus.notify8(battery);
+}
 
 void ble_loop()
 {
@@ -195,14 +233,14 @@ void ble_loop()
 //   if ( newState != buttonState)
 //   {
 //     buttonState = newState;
-//     lsbButton.write8(buttonState);
+//     lsbBotStatus.write8(buttonState);
 
 //     // notify all connected clients
 //     for (uint16_t conn_hdl=0; conn_hdl < MAX_PRPH_CONNECTION; conn_hdl++)
 //     {
-//       if ( Bluefruit.connected(conn_hdl) && lsbButton.notifyEnabled(conn_hdl) )
+//       if ( Bluefruit.connected(conn_hdl) && lsbBotStatus.notifyEnabled(conn_hdl) )
 //       {
-//         lsbButton.notify8(conn_hdl, buttonState);
+//         lsbBotStatus.notify8(conn_hdl, buttonState);
 //       }
 //     }
 //   }
